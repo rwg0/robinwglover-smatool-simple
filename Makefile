@@ -1,2 +1,10 @@
-smatool: smatool.c
-	gcc -L/usr/lib64/mysql -lbluetooth -lcurl -lmysqlclient -g -o smatool smatool.c
+# build smatool executable when user executes "make"
+smatool: smatool.o
+	$(CC) $(LDFLAGS) -lm -lbluetooth smatool.o -o smatool
+smatool.o: smatool.c
+	$(CC) $(CFLAGS) -c smatool.c
+
+# remove object files and executable when user executes "make clean"
+clean:
+	rm *.o smatool
+

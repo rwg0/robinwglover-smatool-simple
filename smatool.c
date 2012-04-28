@@ -109,6 +109,8 @@ unsigned char received[1024];
 	int rr;
 	int terminated;
 
+
+
 char *accepted_strings[] = {
 	"$END",
 	"$ADDR",
@@ -138,6 +140,38 @@ char *accepted_strings[] = {
 	"$CNT",        /*Counter of sent packets*/
 	"$TIMEZONE",    /*Timezone seconds +1 from GMT*/
 	"$TIMESET"    /*Unknown string involved in time setting*/
+};
+
+enum 
+{
+	END,
+	ADDR,
+	TIME,
+	SER,
+	CRC,
+	POW,
+	DTOT,
+	ADD2,
+	CHAN,
+	ITIME,
+	TMMINUS,
+	TMPLUS,
+	TIMESTRING,
+	TIMEFROM1,
+	TIMETO1,
+	TIMEFROM2,
+	TIMETO2,
+	TESTDATA,
+	ARCHIVEDATA1,
+	PASSWORD,
+	SIGNAL,
+	UNKNOWN,
+	INVCODE,
+	ARCHCODE,
+	INVERTERDATA,
+	CNT,        /*Counter of sent packets*/
+	TIMEZONE,    /*Timezone seconds +1 from GMT*/
+	TIMESET    /*Unknown string involved in time setting*/
 };
 
 int cc,debug = 0,verbose=0;
@@ -1488,32 +1522,32 @@ void ReadData()
 		lineread = strtok(NULL," ;");
 		switch(select_str(lineread)) {
 
-		case 0: // $END
+		case END:
 			//do nothing
 			break;			
 
-		case 1: // $ADDR
+		case ADDR:
 			for (i=0;i<6;i++){
 				fl[cc] = address[i];
 				cc++;
 			}
 			break;	
 
-		case 3: // $SER
+		case SER:
 			for (i=0;i<4;i++){
 				fl[cc] = serial[i];
 				cc++;
 			}
 			break;	
 
-		case 7: // $ADD2
+		case ADD2:
 			for (i=0;i<6;i++){
 				fl[cc] = address2[i];
 				cc++;
 			}
 			break;	
 
-		case 8: // $CHAN
+		case CHAN:
 			fl[cc] = chan[0];
 			cc++;
 			break;
@@ -1586,28 +1620,24 @@ void WriteData()
 	int  pass_i;
 	unsigned char send_count = 0x0;
 
-
-
-
-
 	if (debug	== 1) printf("[%d] %s Sending\n", linenum,debugdate());
 	cc = 0;
 	do{
 		lineread = strtok(NULL," ;");
 		switch(select_str(lineread)) {
 
-		case 0: // $END
+		case END:
 			//do nothing
 			break;			
 
-		case 1: // $ADDR
+		case ADDR:
 			for (i=0;i<6;i++){
 				fl[cc] = address[i];
 				cc++;
 			}
 			break;
 
-		case 3: // $SER
+		case SER:
 			for (i=0;i<4;i++){
 				fl[cc] = serial[i];
 				cc++;
@@ -1615,14 +1645,14 @@ void WriteData()
 			break;	
 
 
-		case 7: // $ADD2
+		case ADD2:
 			for (i=0;i<6;i++){
 				fl[cc] = address2[i];
 				cc++;
 			}
 			break;
 
-		case 2: // $TIME	
+		case TIME:	
 			// get report time and convert
 			sprintf(tt,"%x",(int)reporttime); //convert to a hex in a string
 			for (i=7;i>0;i=i-2){ //change order and convert to integer
@@ -1634,7 +1664,7 @@ void WriteData()
 			}
 			break;
 
-		case 11: // $TMPLUS	
+		case TMPLUS:	
 			// get report time and convert
 			sprintf(tt,"%x",(int)reporttime+1); //convert to a hex in a string
 			for (i=7;i>0;i=i-2){ //change order and convert to integer
@@ -1647,7 +1677,7 @@ void WriteData()
 			break;
 
 
-		case 10: // $TMMINUS
+		case TMMINUS:
 			// get report time and convert
 			sprintf(tt,"%x",(int)reporttime-1); //convert to a hex in a string
 			for (i=7;i>0;i=i-2){ //change order and convert to integer
@@ -1659,25 +1689,25 @@ void WriteData()
 			}
 			break;
 
-		case 4: //$crc
+		case CRC: //$crc
 			tryfcs16(fl+19, cc -19);
 			add_escapes(fl,&cc);
 			fix_length_send(fl,&cc);
 			break;
 
-		case 8: // $CHAN
+		case CHAN:
 			fl[cc] = chan[0];
 			cc++;
 			break;
 
-		case 12: // $TIMESTRING
+		case TIMESTRING:
 			for (i=0;i<25;i++){
 				fl[cc] = timestr[i];
 				cc++;
 			}
 			break;
 
-		case 13: // $TIMEFROM1	
+		case TIMEFROM1:	
 			// get report time and convert
 			if( daterange == 1 ) {
 				if( strptime( datefrom, "%Y-%m-%d %H:%M:%S", &tm) == 0 ) 
@@ -1711,7 +1741,7 @@ void WriteData()
 			}
 			break;
 
-		case 14: // $TIMETO1	
+		case TIMETO1:	
 			if( daterange == 1 ) {
 				if( strptime( dateto, "%Y-%m-%d %H:%M:%S", &tm) == 0 ) 
 				{
@@ -1742,7 +1772,7 @@ void WriteData()
 			}
 			break;
 
-		case 15: // $TIMEFROM2	
+		case TIMEFROM2:	
 			if( daterange == 1 ) {
 				strptime( datefrom, "%Y-%m-%d %H:%M:%S", &tm);
 				tm.tm_isdst=-1;
@@ -1770,7 +1800,7 @@ void WriteData()
 			}
 			break;
 
-		case 16: // $TIMETO2	
+		case TIMETO2:	
 			if( daterange == 1 ) {
 				strptime( dateto, "%Y-%m-%d %H:%M:%S", &tm);
 
@@ -1796,7 +1826,7 @@ void WriteData()
 			}
 			break;
 
-		case 19: // $PASSWORD
+		case PASSWORD:
 
 			j=0;
 			for(i=0;i<12;i++){
@@ -1811,32 +1841,32 @@ void WriteData()
 			}
 			break;	
 
-		case 21: // $UNKNOWN
+		case UNKNOWN:
 			for (i=0;i<4;i++){
 				fl[cc] = conf.InverterCode[i];
 				cc++;
 			}
 			break;
 
-		case 22: // $INVCODE
+		case INVCODE:
 			fl[cc] = invcode;
 			cc++;
 			break;
-		case 23: // $ARCHCODE
+		case ARCHCODE:
 			fl[cc] = conf.ArchiveCode;
 			cc++;
 			break;
-		case 25: // $CNT send counter
+		case CNT: //send counter
 			send_count++;
 			fl[cc] = send_count;
 			cc++;
 			break;
-		case 26: // $TIMEZONE timezone in seconds, reverse endian
+		case TIMEZONE: //timezone in seconds, reverse endian
 			fl[cc] = tzhex[0];
 			fl[cc+1] = tzhex[1];
 			cc+=2;
 			break;
-		case 27: // $TIMESET unknown setting
+		case TIMESET: //unknown setting
 			for( i=0; i<4; i++ ) {
 				fl[cc] = timeset[i];
 				cc++;
@@ -1872,7 +1902,7 @@ void WriteData()
 void ExtractData()
 {
 	int datalen, togo;
-	int day,month,year,hour,minute,second,datapoint;
+	int day,month,year,hour,minute,second;
 	time_t idate;
 	struct tm *loctime;
 	float currentpower_total;
@@ -1886,7 +1916,6 @@ void ExtractData()
 	int finished=0;
 	unsigned char datarecord[1024];
 	time_t prev_idate;
-	int crc_at_end;
 
 
 
@@ -1897,7 +1926,7 @@ void ExtractData()
 		//printf( "\nselect=%d", select_str(lineread)); 
 		switch(select_str(lineread)) {
 
-		case 3: // Extract Serial of Inverter
+		case SER: // Extract Serial of Inverter
 
 			data = ReadStream( &conf, &s, received, &rr, data, &datalen, last_sent, cc, &terminated, &togo );
 			/*
@@ -1914,7 +1943,7 @@ void ExtractData()
 			free( data );
 			break;
 
-		case 9: // extract Time from Inverter
+		case ITIME: // extract Time from Inverter
 			idate = (received[66] * 16777216 ) + (received[65] *65536 )+ (received[64] * 256) + received[63];
 			loctime = localtime(&idate);
 			day = loctime->tm_mday;
@@ -1927,7 +1956,7 @@ void ExtractData()
 			//currentpower = (received[72] * 256) + received[71];
 			//printf("Current power = %i Watt\n",currentpower);
 			break;
-		case 5: // extract current power $POW
+		case POW: // extract current power $POW
 			data = ReadStream( &conf, &s, received, &rr, data, &datalen, last_sent, cc, &terminated, &togo );
 			if( (data+3)[0] == 0x08 )
 				gap = 40; 
@@ -1964,7 +1993,7 @@ void ExtractData()
 			free( data );
 			break;
 
-		case 6: // extract total energy collected today
+		case DTOT: // extract total energy collected today
 
 			gtotal = (received[69] * 65536) + (received[68] * 256) + received[67];
 			gtotal = gtotal / 1000;
@@ -1974,17 +2003,17 @@ void ExtractData()
 			printf("E total today = %.2f Kwh\n",dtotal);
 			break;		
 
-		case 7: // extract 2nd address
+		case ADD2: // extract 2nd address
 			memcpy(address2,received+26,6);
 			if (debug == 1) printf("address 2 \n");
 			break;
 
-		case 8: // extract bluetooth channel
+		case CHAN: // extract bluetooth channel
 			memcpy(chan,received+22,1);
 			if (debug == 1) printf("Bluetooth channel = %i\n",chan[0]);
 			break;
 
-		case 12: // extract time strings $TIMESTRING
+		case TIMESTRING: // extract time strings $TIMESTRING
 			if(( received[60] == 0x6d )&&( received[61] == 0x23 ))
 			{
 				memcpy(timestr,received+63,24);
@@ -2019,14 +2048,14 @@ void ExtractData()
 
 			break;
 
-		case 17: // Test data
+		case TESTDATA: // Test data
 			data = ReadStream( &conf, &s, received, &rr, data, &datalen, last_sent, cc, &terminated, &togo );
 			printf( "\n" );
 
 			free( data );
 			break;
 
-		case 18: // $ARCHIVEDATA1
+		case ARCHIVEDATA1:
 			finished=0;
 			ptotal=0;
 			idate=0;
@@ -2056,7 +2085,7 @@ void ExtractData()
 						ConvertStreamtoFloat( datarecord+4, 8, &gtotal );
 						if(archdatalen == 0 )
 							ptotal = gtotal;
-						printf("\n%d/%d/%4d %02d:%02d:%02d  total=%.3f Kwh current=%.0f Watts togo=%d i=%d crc=%d", day, month, year, hour, minute,second, gtotal/1000, (gtotal-ptotal)*12, togo, i, crc_at_end);
+						printf("\n%d/%d/%4d %02d:%02d:%02d  total=%.3f Kwh current=%.0f Watts togo=%d i=%d", day, month, year, hour, minute,second, gtotal/1000, (gtotal-ptotal)*12, togo, i);
 						if( idate != prev_idate+300 ) {
 							printf( "Date Error! prev=%d current=%d\n", (int)prev_idate, (int)idate );
 							break;
@@ -2098,19 +2127,19 @@ void ExtractData()
 			printf( "\n" );
 
 			break;
-		case 20: // SIGNAL signal strength
+		case SIGNAL: // SIGNAL signal strength
 
 			strength  = (received[22] * 100.0)/0xff;
 			if (verbose == 1) {
 				printf("bluetooth signal = %.0f%%\n",strength);
 			}
 			break;		
-		case 22: // extract time strings $INVCODE
+		case INVCODE: // extract time strings $INVCODE
 			invcode=received[22];
 			if (debug == 1) printf("extracting invcode=%02x\n", invcode);
 
 			break;
-		case 24: // Inverter data $INVERTERDATA
+		case INVERTERDATA: // Inverter data $INVERTERDATA
 			data = ReadStream( &conf, &s, received, &rr, data, &datalen, last_sent, cc, &terminated, &togo );
 			if( debug==1 ) printf( "data=%02x\n",(data+3)[0] );
 			if( (data+3)[0] == 0x08 )
@@ -2160,13 +2189,11 @@ void ExtractData()
 int main(int argc, char **argv)
 {
 	struct sockaddr_rc addr = { 0 };
-	int i,j,status,post=0,repost=0,test=0,file=0;
+	int i,status,post=0,repost=0,test=0,file=0;
 	int install=0, update=0;
 	int location=0;
 	int  initstarted=0,setupstarted=0,rangedatastarted=0;
 	char line[400];
-
-	char sunrise_time[6],sunset_time[6];
 
 	memset(received,0,1024);
 

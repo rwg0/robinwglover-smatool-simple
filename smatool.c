@@ -84,26 +84,30 @@ ConfType conf;
 FILE *fp;
 long returnpos;
 int returnline;
-	int archdatalen=0;
-	struct archdata_type
-	{
-		time_t date;
-		char   inverter[20];
-		long unsigned int serial;
-		float  accum_value;
-		float  current_value;
-	} *archdatalist;
-	time_t reporttime;
-		char datefrom[100];
-	char dateto[100];
+int archdatalen=0;
+struct archdata_type
+{
+	time_t date;
+	char   inverter[20];
+	long unsigned int serial;
+	float  accum_value;
+	float  current_value;
+} *archdatalist;
+time_t reporttime;
+char datefrom[100];
+char dateto[100];
 int daterange = 0;
-	int  invcode;
-	unsigned char timestr[25] = { 0 };
-	unsigned char tzhex[2] = { 0 };
-	unsigned char timeset[4] = { 0x30,0xfe,0x7e,0x00 };
+int  invcode;
+unsigned char timestr[25] = { 0 };
+unsigned char tzhex[2] = { 0 };
+unsigned char timeset[4] = { 0x30,0xfe,0x7e,0x00 };
 int s;
-	ReturnType *returnkeylist;
-	int num_return_keys=0;
+ReturnType *returnkeylist;
+int num_return_keys=0;
+unsigned char received[1024];
+	unsigned char * data;
+	int rr;
+	int terminated;
 
 char *accepted_strings[] = {
 	"$END",
@@ -914,7 +918,7 @@ int is_light( float latitude, float longitude)
 	ss = sunset(latitude, longitude);
 	//	printf("%f - %f", sr, ss);
 
-	return tofd >= sr && tofd <= ss;
+	return 1 || (tofd >= sr && tofd <= ss);
 
 }
 
@@ -1091,6 +1095,9 @@ void  SetSwitches( ConfType *conf, char * datefrom, char * dateto, int *location
 unsigned char *
 	ReadStream( ConfType * conf, int * s, unsigned char * stream, int * streamlen, unsigned char * datalist, int * datalen, unsigned char * last_sent, int cc, int * terminated, int * togo )
 {
+
+//	if (debug) printf( "%x, %d, %x, %d, %x, %d, %d, %d, %d, %d", conf, *s, stream, *streamlen, datalist, *datalen, *last_sent, cc, *terminated, *togo);
+
 	int	finished;
 	int	finished_record;
 	int  i, j=0;
@@ -1099,6 +1106,7 @@ unsigned char *
 	if( debug==1 ) printf( "togo=%d\n", (*togo) );
 	i=59; //Initial position of data stream
 	(*datalen)=0;
+
 	datalist=(unsigned char *)malloc(sizeof(char));
 	finished=0;
 	finished_record=0;
@@ -1473,10 +1481,6 @@ char * debugdate()
 void ReadData()
 {
 	int i;
-	int rr, terminated;
-	unsigned char received[1024];
-
-	memset(received,0,1024);
 
 	if (debug	== 1) printf("[%d] %s Waiting for string\n",linenum, debugdate() );
 	cc = 0;
@@ -1579,9 +1583,9 @@ void WriteData()
 	time_t fromtime;
 	time_t totime;
 	struct tm tm;
-		int  pass_i;
-   	unsigned char send_count = 0x0;
-  
+	int  pass_i;
+	unsigned char send_count = 0x0;
+
 
 
 
@@ -1867,9 +1871,7 @@ void WriteData()
 
 void ExtractData()
 {
-	unsigned char * data;
-	unsigned char received[1024];
-	int rr, datalen, terminated, togo;
+	int datalen, togo;
 	int day,month,year,hour,minute,second,datapoint;
 	time_t idate;
 	struct tm *loctime;
@@ -1887,7 +1889,6 @@ void ExtractData()
 	int crc_at_end;
 
 
-	memset(received,0,1024);
 
 	if (debug	== 1) printf("[%d] %s Extracting\n", linenum, debugdate());
 	cc = 0;
@@ -2159,19 +2160,15 @@ void ExtractData()
 int main(int argc, char **argv)
 {
 	struct sockaddr_rc addr = { 0 };
-	int datalen = 0;
-	int terminated=0;
 	int i,j,status,post=0,repost=0,test=0,file=0;
 	int install=0, update=0;
 	int location=0;
-	int ret;
 	int  initstarted=0,setupstarted=0,rangedatastarted=0;
-	char compurl[400];  //seg error on curl fix 2012.01.14
 	char line[400];
-	time_t curtime;
-	int   rr;
 
 	char sunrise_time[6],sunset_time[6];
+
+	memset(received,0,1024);
 
 
 	last_sent = (unsigned  char *)malloc( sizeof( unsigned char ));
@@ -2235,7 +2232,10 @@ int main(int argc, char **argv)
 				close( s );
 			}
 			else
+			{
+				if( debug==1 ) { printf( "connected to server\n"); }
 				break;
+			}
 		}
 		if (status < 0 )
 		{
@@ -2290,8 +2290,6 @@ int main(int argc, char **argv)
 
 			}
 		}
-
-
 
 		close(s);
 		if( archdatalen > 0 )

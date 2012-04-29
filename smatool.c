@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 #include <sys/types.h>
 #include <sys/time.h>
 #include <stdarg.h>
+#include <signal.h>
 
 
 
@@ -2028,8 +2029,14 @@ void ExtractData()
 				}
 				if( return_key >= 0 )
 				{
-					if (conf.liveMode && !strcmp(returnkeylist[return_key].description, "Total Power"))
-						printf("%.0f\n", currentpower_total/returnkeylist[return_key].divisor);
+					if (conf.liveMode)
+					{
+						if (!strcmp(returnkeylist[return_key].description, "Total Power"))
+							printf("Power=%.0f ", currentpower_total/returnkeylist[return_key].divisor);
+						if (!strcmp(returnkeylist[return_key].description, "Total Generation"))
+							printf("Total=%.3f ", currentpower_total/returnkeylist[return_key].divisor);
+
+					}
 					printoutput("%d-%02d-%02d %02d:%02d:%02d %-20s = %.3f %-20s\n", year, month, day, hour, minute, second, returnkeylist[return_key].description, currentpower_total/returnkeylist[return_key].divisor, returnkeylist[return_key].units );
 				}
 				else
@@ -2278,6 +2285,14 @@ void ProcessLine(FILE* fp)
 	}
 }
 
+void  ALARMhandler(int sig)
+{
+	signal(SIGALRM, SIG_IGN);          /* ignore this signal       */
+	printerror("Timeout trying to talk to inverter\n");  
+	signal(SIGALRM, ALARMhandler);     /* reinstall the handler    */
+	exit(1);
+}
+
 
 int main(int argc, char **argv)
 {
@@ -2287,6 +2302,8 @@ int main(int argc, char **argv)
 	int location=0;
 
 	memset(received,0,1024);
+	signal(SIGALRM, ALARMhandler);
+	alarm(60);
 
 	last_sent = (unsigned  char *)malloc( sizeof( unsigned char ));
 	/* get the report time - used in various places */
@@ -2374,9 +2391,13 @@ int main(int argc, char **argv)
 				break;
 		}
 
+		if (conf.liveMode)
+			printf("\n");
+
+
 		while (conf.liveMode) // livedata...
 		{
-
+			alarm(30);
 			sleep(5);
 
 
@@ -2390,6 +2411,7 @@ int main(int argc, char **argv)
 				{
 					ProcessLine(fp);
 				}
+				printf("\n");
 			}
 
 		}

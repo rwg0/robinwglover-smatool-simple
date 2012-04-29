@@ -2030,7 +2030,7 @@ void ExtractData()
 				{
 					if (conf.liveMode && !strcmp(returnkeylist[return_key].description, "Total Power"))
 						printf("%.0f\n", currentpower_total/returnkeylist[return_key].divisor);
-					printoutput("%d-%02d-%02d %02d:%02d:%02d %-20s = %.0f %-20s\n", year, month, day, hour, minute, second, returnkeylist[return_key].description, currentpower_total/returnkeylist[return_key].divisor, returnkeylist[return_key].units );
+					printoutput("%d-%02d-%02d %02d:%02d:%02d %-20s = %.3f %-20s\n", year, month, day, hour, minute, second, returnkeylist[return_key].description, currentpower_total/returnkeylist[return_key].divisor, returnkeylist[return_key].units );
 				}
 				else
 					printoutput("%d-%02d-%02d %02d:%02d:%02d NO DATA for %02x %02x = %.0f NO UNITS\n", year, month, day, hour, minute, second, (data+i+1)[0], (data+i+1)[1], currentpower_total );
@@ -2324,7 +2324,7 @@ int main(int argc, char **argv)
 	// Get Local Timezone offset in seconds
 	get_timezone_in_seconds( tzhex );
 	//	printdebug("daterange is %d\n", daterange);
-	if(((location=0)||is_light( conf.latitude_f, conf.longitude_f )||conf.nightMode))
+	if(((location=0)||conf.nightMode||conf.liveMode||is_light( conf.latitude_f, conf.longitude_f )))
 	{
 		printverbose("Address %s\n",conf.BTAddress);
 
@@ -2376,15 +2376,20 @@ int main(int argc, char **argv)
 
 		while (conf.liveMode) // livedata...
 		{
-			// go back to the livepos section of the input file
-			fseek(fp, livepos, SEEK_SET);
-			linenum = liveline;
+
 			sleep(5);
 
-			rangedatastarted = 0;
-			while (rangedatastarted == 0)
+
+			if (conf.nightMode || is_light(conf.latitude_f, conf.longitude_f))
 			{
-				ProcessLine(fp);
+				// go back to the livepos section of the input file
+				fseek(fp, livepos, SEEK_SET);
+				linenum = liveline;
+				rangedatastarted = 0;
+				while (rangedatastarted == 0)
+				{
+					ProcessLine(fp);
+				}
 			}
 
 		}

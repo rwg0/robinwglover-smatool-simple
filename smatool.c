@@ -63,6 +63,7 @@ typedef struct{
 	unsigned char InverterCode[4]; /*Unknown code inverter specific*/
 	unsigned int ArchiveCode;    /* Code for archive data */
 	int nightMode;
+	int liveMode;
 } ConfType;
 
 typedef struct{
@@ -107,9 +108,9 @@ int s;
 ReturnType *returnkeylist;
 int num_return_keys=0;
 unsigned char received[1024];
-	unsigned char * data;
-	int rr;
-	int terminated;
+unsigned char * data;
+int rr;
+int terminated;
 
 
 
@@ -275,37 +276,39 @@ void printdebug(char* fmt, ...)
 {
 	if (debug ==0)
 		return;
-    va_list args;
-    va_start(args,fmt);
-    vprintf(fmt,args);
-    va_end(args);
+	va_list args;
+	va_start(args,fmt);
+	vprintf(fmt,args);
+	va_end(args);
 }
 
 void printerror(char* fmt, ...)
 {
-    va_list args;
-    va_start(args,fmt);
-    vfprintf(stderr, fmt,args);
-    va_end(args);
+	va_list args;
+	va_start(args,fmt);
+	vfprintf(stderr, fmt,args);
+	va_end(args);
 }
 
 
 void printoutput(char* fmt, ...)
 {
-    va_list args;
-    va_start(args,fmt);
-    vprintf(fmt,args);
-    va_end(args);
+	if (conf.liveMode)
+		return; // no normal output in live mode
+	va_list args;
+	va_start(args,fmt);
+	vprintf(fmt,args);
+	va_end(args);
 }
 
 void printverbose(char* fmt, ...)
 {
 	if (verbose ==0)
 		return;
-    va_list args;
-    va_start(args,fmt);
-    vprintf(fmt,args);
-    va_end(args);
+	va_list args;
+	va_start(args,fmt);
+	vprintf(fmt,args);
+	va_end(args);
 }
 
 /*
@@ -1162,7 +1165,7 @@ unsigned char *
 	ReadStream( ConfType * conf, int * s, unsigned char * stream, int * streamlen, unsigned char * datalist, int * datalen, unsigned char * last_sent, int cc, int * terminated, int * togo )
 {
 
-//	printdebug( "%x, %d, %x, %d, %x, %d, %d, %d, %d, %d", conf, *s, stream, *streamlen, datalist, *datalen, *last_sent, cc, *terminated, *togo);
+	//	printdebug( "%x, %d, %x, %d, %x, %d, %d, %d, %d, %d", conf, *s, stream, *streamlen, datalist, *datalen, *last_sent, cc, *terminated, *togo);
 
 	int	finished;
 	int	finished_record;
@@ -1231,7 +1234,9 @@ void InitConfig( ConfType *conf, char * datefrom, char * dateto )
 	conf->InverterCode[3]=0;  
 	conf->ArchiveCode=0;  
 	strcpy( datefrom, "" );  
-	strcpy( dateto, "" );  
+	strcpy( dateto, "" );
+	conf->liveMode = 0;
+	conf->nightMode = 0;
 }
 
 /* read Config from file */
@@ -1401,7 +1406,8 @@ void PrintHelp()
 	printoutput( "  -key,  --pvoutkey PVOUTKEY               pvoutput.org key\n");
 	printoutput( "  -sid,  --pvoutsid PVOUTSID               pvoutput.org sid\n");
 	printoutput( "  -repost                                  verify and repost data if different\n");
-	printoutput( "  -n	                                    Night mode - do not test for the sun being up\n");
+	printoutput( "  -n	                                     Night mode - do not test for the sun being up\n");
+	printoutput( "  -l	                                     Live mode - output the live power to stdout every 5 seconds\n");
 	printoutput( "\n\n" );
 }
 
@@ -1423,6 +1429,7 @@ int ReadCommandConfig( ConfType *conf, int argc, char **argv, char * datefrom, c
 		}
 		else if (strcmp(argv[i],"--test")==0) (*test)=1;
 		else if (strcmp(argv[i],"-n")==0) conf->nightMode = 1;
+		else if (strcmp(argv[i],"-l")==0) conf->liveMode = 1;
 		else if ((strcmp(argv[i],"-from")==0)||(strcmp(argv[i],"--datefrom")==0)){
 			i++;
 			if(i<argc){
@@ -2020,7 +2027,11 @@ void ExtractData()
 					}
 				}
 				if( return_key >= 0 )
+				{
+					if (conf.liveMode && !strcmp(returnkeylist[return_key].description, "Total Power"))
+						printf("%.0f\n", currentpower_total/returnkeylist[return_key].divisor);
 					printoutput("%d-%02d-%02d %02d:%02d:%02d %-20s = %.0f %-20s\n", year, month, day, hour, minute, second, returnkeylist[return_key].description, currentpower_total/returnkeylist[return_key].divisor, returnkeylist[return_key].units );
+				}
 				else
 					printoutput("%d-%02d-%02d %02d:%02d:%02d NO DATA for %02x %02x = %.0f NO UNITS\n", year, month, day, hour, minute, second, (data+i+1)[0], (data+i+1)[1], currentpower_total );
 			}
@@ -2217,6 +2228,56 @@ void ExtractData()
 	while (strcmp(lineread,"$END"));
 } 
 
+int livepos, liveline;
+int  initstarted=0,setupstarted=0,rangedatastarted=0;
+
+void ProcessLine(FILE* fp)
+{
+	char line[400];
+	if (fgets(line,400,fp) != NULL){				//read line from sma.in
+		linenum++;
+		lineread = strtok(line," ;");
+		if(!strcmp(lineread,"R")){		//See if line is something we need to receive
+			ReadData();
+		}
+		if(!strcmp(lineread,"S")){		//See if line is something we need to send
+			WriteData();
+		}
+		if(!strcmp(lineread,"E")){		//See if line is something we need to extract
+			ExtractData();
+		}
+		if(!strcmp(lineread,":init")){		//See if line is something we need to extract
+			initstarted=1;
+			returnpos=ftell(fp);
+			returnline = linenum;
+		}
+		if(!strcmp(lineread,":setup")){		//See if line is something we need to extract
+			setupstarted=1;
+			returnpos=ftell(fp);
+			returnline = linenum;
+		}
+		if(!strcmp(lineread,":startsetup")){		//See if line is something we need to extract
+			sleep(1);
+		}
+		if(!strcmp(lineread,":setinverter1")){		//See if line is something we need to extract
+			setupstarted=1;
+			returnpos=ftell(fp);
+			returnline = linenum;
+		}
+		if(!strcmp(lineread,":getrangedata")){		//See if line is something we need to extract
+			rangedatastarted=1;
+			returnpos=ftell(fp);
+			returnline = linenum;
+		}
+		if (!strcmp(lineread,"getlivevalues"))
+		{
+			livepos = ftell(fp);
+			liveline = linenum;
+		}
+
+	}
+}
+
 
 int main(int argc, char **argv)
 {
@@ -2224,8 +2285,7 @@ int main(int argc, char **argv)
 	int i,status,post=0,repost=0,test=0,file=0;
 	int install=0, update=0;
 	int location=0;
-	int  initstarted=0,setupstarted=0,rangedatastarted=0;
-	char line[400];
+
 
 	memset(received,0,1024);
 
@@ -2310,45 +2370,22 @@ int main(int argc, char **argv)
 		address[0] = conv(strtok(NULL,":"));
 
 		while (!feof(fp)){	
-			if (fgets(line,400,fp) != NULL){				//read line from sma.in
-				linenum++;
-				lineread = strtok(line," ;");
-				if(!strcmp(lineread,"R")){		//See if line is something we need to receive
-					ReadData();
-				}
-				if(!strcmp(lineread,"S")){		//See if line is something we need to send
-					WriteData();
-				}
-				if(!strcmp(lineread,"E")){		//See if line is something we need to extract
-					ExtractData();
-				}
-				if(!strcmp(lineread,":init")){		//See if line is something we need to extract
-					initstarted=1;
-					returnpos=ftell(fp);
-					returnline = linenum;
-				}
-				if(!strcmp(lineread,":setup")){		//See if line is something we need to extract
-					setupstarted=1;
-					returnpos=ftell(fp);
-					returnline = linenum;
-				}
-				if(!strcmp(lineread,":startsetup")){		//See if line is something we need to extract
-					sleep(1);
-				}
-				if(!strcmp(lineread,":setinverter1")){		//See if line is something we need to extract
-					setupstarted=1;
-					returnpos=ftell(fp);
-					returnline = linenum;
-				}
-				if(!strcmp(lineread,":getrangedata")){		//See if line is something we need to extract
-					rangedatastarted=1;
-					returnpos=ftell(fp);
-					returnline = linenum;
+			ProcessLine(fp);
+		}
 
-				}
+		while (conf.liveMode) // livedata...
+		{
+			// go back to the livepos section of the input file
+			fseek(fp, livepos, SEEK_SET);
+			linenum = liveline;
 
+			rangedatastarted = 0;
+			while (rangedatastarted == 0)
+			{
+				ProcessLine(fp);
 			}
 		}
+
 
 		close(s);
 		if( archdatalen > 0 )

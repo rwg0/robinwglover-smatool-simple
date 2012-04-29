@@ -1769,7 +1769,7 @@ void WriteData()
 			}
 			else
 			{
-				printerror( "no from" ); 
+				printoutput( "no from" ); 
 				fromtime=0;
 			}
 			sprintf(tt,"%03x",(int)fromtime-300); //convert to a hex in a string and start 5 mins before for dummy read.
@@ -1828,7 +1828,7 @@ void WriteData()
 			}
 			else
 			{
-				printerror( "no from" ); 
+				printoutput( "no from" ); 
 				fromtime=0;
 			}
 			sprintf(tt,"%03x",(int)fromtime); //convert to a hex in a string
@@ -2269,7 +2269,7 @@ void ProcessLine(FILE* fp)
 			returnpos=ftell(fp);
 			returnline = linenum;
 		}
-		if (!strcmp(lineread,"getlivevalues"))
+		if (!strcmp(lineread,":getlivevalues"))
 		{
 			livepos = ftell(fp);
 			liveline = linenum;
@@ -2286,9 +2286,7 @@ int main(int argc, char **argv)
 	int install=0, update=0;
 	int location=0;
 
-
 	memset(received,0,1024);
-
 
 	last_sent = (unsigned  char *)malloc( sizeof( unsigned char ));
 	/* get the report time - used in various places */
@@ -2371,6 +2369,9 @@ int main(int argc, char **argv)
 
 		while (!feof(fp)){	
 			ProcessLine(fp);
+
+			if (conf.liveMode && rangedatastarted)
+				break;
 		}
 
 		while (conf.liveMode) // livedata...
@@ -2378,12 +2379,14 @@ int main(int argc, char **argv)
 			// go back to the livepos section of the input file
 			fseek(fp, livepos, SEEK_SET);
 			linenum = liveline;
+			sleep(5);
 
 			rangedatastarted = 0;
 			while (rangedatastarted == 0)
 			{
 				ProcessLine(fp);
 			}
+
 		}
 
 

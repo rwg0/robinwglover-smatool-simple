@@ -32,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 #include <sys/time.h>
 #include <stdarg.h>
 #include <signal.h>
+#include <errno.h>
 
 
 
@@ -281,6 +282,7 @@ void printdebug(char* fmt, ...)
 	va_start(args,fmt);
 	vprintf(fmt,args);
 	va_end(args);
+	fflush(stdout);
 }
 
 void printerror(char* fmt, ...)
@@ -289,6 +291,7 @@ void printerror(char* fmt, ...)
 	va_start(args,fmt);
 	vfprintf(stderr, fmt,args);
 	va_end(args);
+	fflush(stderr);
 }
 
 
@@ -300,7 +303,23 @@ void printoutput(char* fmt, ...)
 	va_start(args,fmt);
 	vprintf(fmt,args);
 	va_end(args);
+	fflush(stdout);
 }
+
+void printlive(char* fmt, ...)
+{
+	int err;
+	if (!conf.liveMode)
+		return; // no normal output in live mode
+	va_list args;
+	va_start(args,fmt);
+	err = vprintf(fmt,args);
+	if (err<0)
+		exit(errno);
+	va_end(args);
+	fflush(stdout);
+}
+
 
 void printverbose(char* fmt, ...)
 {
@@ -2032,9 +2051,9 @@ void ExtractData()
 					if (conf.liveMode)
 					{
 						if (!strcmp(returnkeylist[return_key].description, "Total Power"))
-							printf("Power=%.0f ", currentpower_total/returnkeylist[return_key].divisor);
+							printlive("Power=%.0f ", currentpower_total/returnkeylist[return_key].divisor);
 						if (!strcmp(returnkeylist[return_key].description, "Total Generation"))
-							printf("Total=%.3f ", currentpower_total/returnkeylist[return_key].divisor);
+							printlive("Total=%.3f ", currentpower_total/returnkeylist[return_key].divisor);
 
 					}
 					printoutput("%d-%02d-%02d %02d:%02d:%02d %-20s = %.3f %-20s\n", year, month, day, hour, minute, second, returnkeylist[return_key].description, currentpower_total/returnkeylist[return_key].divisor, returnkeylist[return_key].units );
@@ -2293,6 +2312,11 @@ void  ALARMhandler(int sig)
 	exit(1);
 }
 
+void PipeHandler()
+{
+	printerror("Broken Pipe.");
+	exit(EPIPE);
+}
 
 int main(int argc, char **argv)
 {
@@ -2303,6 +2327,7 @@ int main(int argc, char **argv)
 
 	memset(received,0,1024);
 	signal(SIGALRM, ALARMhandler);
+	signal(SIGPIPE, PipeHandler);
 	alarm(60);
 
 	last_sent = (unsigned  char *)malloc( sizeof( unsigned char ));
@@ -2384,6 +2409,7 @@ int main(int argc, char **argv)
 		address[1] = conv(strtok(NULL,":"));
 		address[0] = conv(strtok(NULL,":"));
 
+		alarm(30);
 		while (!feof(fp)){	
 			ProcessLine(fp);
 
@@ -2392,14 +2418,13 @@ int main(int argc, char **argv)
 		}
 
 		if (conf.liveMode)
-			printf("\n");
+			printlive("\n");
 
 
 		while (conf.liveMode) // livedata...
 		{
 			alarm(30);
 			sleep(5);
-
 
 			if (conf.nightMode || is_light(conf.latitude_f, conf.longitude_f))
 			{
@@ -2411,9 +2436,12 @@ int main(int argc, char **argv)
 				{
 					ProcessLine(fp);
 				}
-				printf("\n");
+				printlive("\n");
 			}
-
+			else
+			{
+				printlive("Night time...\n");
+			}
 		}
 
 

@@ -76,6 +76,7 @@ typedef struct{
 	float		divisor;
 } ReturnType;
 
+int location=0;
 int failedbluetooth=0;
 unsigned char * last_sent;
 char *lineread;
@@ -113,7 +114,7 @@ unsigned char received[1024];
 unsigned char * data;
 int rr;
 int terminated;
-
+int file = 0;
 
 
 char *accepted_strings[] = {
@@ -1155,7 +1156,7 @@ time_t ConvertStreamtoTime( unsigned char * stream, int length, time_t * value )
 }
 
 // Set switches to save lots of strcmps
-void  SetSwitches( ConfType *conf, char * datefrom, char * dateto, int *location, int *post, int *file, int *daterange, int *test )  
+void  SetSwitches( ConfType *conf, char * datefrom, char * dateto, int *location, int *file, int *daterange, int *test )  
 {
 	//Check if all location variables are set
 	if(( conf->latitude_f <= 180 )&&( conf->longitude_f <= 180 ))
@@ -1167,13 +1168,6 @@ void  SetSwitches( ConfType *conf, char * datefrom, char * dateto, int *location
 		(*file)=1;
 	else
 		(*file)=0;
-	//Check if all PVOutput variables are set
-	if(( strlen(conf->PVOutputURL) > 0 )
-		&&( strlen(conf->PVOutputKey) > 0 )
-		&&( strlen(conf->PVOutputSid) > 0 ))
-		(*post)=1;
-	else
-		(*post)=0;
 	if(( strlen(datefrom) > 0 )
 		&&( strlen(dateto) > 0 ))
 		(*daterange)=1;
@@ -1425,14 +1419,13 @@ void PrintHelp()
 	printoutput( "  -url,  --pvouturl PVOUTURL               pvoutput.org live url\n");
 	printoutput( "  -key,  --pvoutkey PVOUTKEY               pvoutput.org key\n");
 	printoutput( "  -sid,  --pvoutsid PVOUTSID               pvoutput.org sid\n");
-	printoutput( "  -repost                                  verify and repost data if different\n");
 	printoutput( "  -n	                                     Night mode - do not test for the sun being up\n");
 	printoutput( "  -l	                                     Live mode - output the live power to stdout every 5 seconds\n");
 	printoutput( "\n\n" );
 }
 
 /* Init Config to default values */
-int ReadCommandConfig( ConfType *conf, int argc, char **argv, char * datefrom, char * dateto, int * verbose, int * debug, int * repost, int * test, int * install, int * update )
+int ReadCommandConfig( ConfType *conf, int argc, char **argv, char * datefrom, char * dateto, int * verbose, int * debug, int * test)
 {
 	int	i;
 
@@ -1461,10 +1454,6 @@ int ReadCommandConfig( ConfType *conf, int argc, char **argv, char * datefrom, c
 			if(i<argc){
 				strcpy(dateto,argv[i]);
 			}
-		}
-		else if (strcmp(argv[i],"-repost")==0){
-			i++;
-			(*repost)=1;
 		}
 		else if ((strcmp(argv[i],"-i")==0)||(strcmp(argv[i],"--inverter")==0)){
 			i++;
@@ -1531,8 +1520,6 @@ int ReadCommandConfig( ConfType *conf, int argc, char **argv, char * datefrom, c
 			PrintHelp();
 			return( -1 );
 		}
-		else if (strcmp(argv[i],"--INSTALL")==0) (*install)=1;
-		else if (strcmp(argv[i],"--UPDATE")==0) (*update)=1;
 		else
 		{
 			printerror("Bad Syntax\n\n" );
@@ -2318,54 +2305,11 @@ void PipeHandler()
 	exit(EPIPE);
 }
 
-int main(int argc, char **argv)
+int FetchInverterData()
 {
 	struct sockaddr_rc addr = { 0 };
-	int i,status,post=0,repost=0,test=0,file=0;
-	int install=0, update=0;
-	int location=0;
+	int i,status;
 
-	memset(received,0,1024);
-	signal(SIGALRM, ALARMhandler);
-	signal(SIGPIPE, PipeHandler);
-	alarm(60);
-
-	last_sent = (unsigned  char *)malloc( sizeof( unsigned char ));
-	/* get the report time - used in various places */
-	reporttime = time(NULL);  //get time in seconds since epoch (1/1/1970)	
-
-	// set config to defaults
-	InitConfig( &conf, datefrom, dateto );
-	// read command arguments needed so can get config
-	if( ReadCommandConfig( &conf, argc, argv, datefrom, dateto, &verbose, &debug, &repost, &test, &install, &update ) < 0 )
-	{
-		printerror("Bad Command Config\n");
-		exit(0);
-	}
-	// read Config file
-	if( GetConfig( &conf ) < 0 )
-	{
-		printerror("Bad Config\n");
-		exit(-1);
-	}
-	// read command arguments  again - they overide config
-	if( ReadCommandConfig( &conf, argc, argv, datefrom, dateto, &verbose, &debug, &repost, &test, &install, &update ) < 0 )
-		exit(0);
-	// read Inverter Setting file
-	if( GetInverterSetting( &conf ) < 0 )
-	{
-		printerror("Bad inverter string \n");
-		exit(-1);
-	}
-	// set switches used through the program
-	SetSwitches( &conf, datefrom, dateto, &location, &post, &file, &daterange, &test );  
-	// Set value for inverter type
-	//SetInverterType( &conf );
-	// Get Return Value lookup from file
-	returnkeylist = InitReturnKeys( &conf, returnkeylist, &num_return_keys );
-	// Get Local Timezone offset in seconds
-	get_timezone_in_seconds( tzhex );
-	//	printdebug("daterange is %d\n", daterange);
 	if(((location=0)||conf.nightMode||conf.liveMode||is_light( conf.latitude_f, conf.longitude_f )))
 	{
 		printverbose("Address %s\n",conf.BTAddress);
@@ -2440,17 +2384,85 @@ int main(int argc, char **argv)
 			}
 			else
 			{
-				printlive("Night time...\n");
+				break;
 			}
 		}
-
-
 		close(s);
-		if( archdatalen > 0 )
-			free( archdatalist );
-		archdatalen=0;
-		free(last_sent);
+
 	}
+
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	int test=0;
+
+	memset(received,0,1024);
+	signal(SIGALRM, ALARMhandler);
+	signal(SIGPIPE, PipeHandler);
+	alarm(60);
+
+	last_sent = (unsigned  char *)malloc( sizeof( unsigned char ));
+	/* get the report time - used in various places */
+	reporttime = time(NULL);  //get time in seconds since epoch (1/1/1970)	
+
+	// set config to defaults
+	InitConfig( &conf, datefrom, dateto );
+	// read command arguments needed so can get config
+	if( ReadCommandConfig( &conf, argc, argv, datefrom, dateto, &verbose, &debug, &test) < 0 )
+	{
+		printerror("Bad Command Config\n");
+		exit(0);
+	}
+	// read Config file
+	if( GetConfig( &conf ) < 0 )
+	{
+		printerror("Bad Config\n");
+		exit(-1);
+	}
+	// read command arguments  again - they overide config
+	if( ReadCommandConfig( &conf, argc, argv, datefrom, dateto, &verbose, &debug, &test) < 0 )
+		exit(0);
+	// read Inverter Setting file
+	if( GetInverterSetting( &conf ) < 0 )
+	{
+		printerror("Bad inverter string \n");
+		exit(-1);
+	}
+	// set switches used through the program
+	SetSwitches( &conf, datefrom, dateto, &location, &file, &daterange, &test );  
+	// Set value for inverter type
+	//SetInverterType( &conf );
+	// Get Return Value lookup from file
+	returnkeylist = InitReturnKeys( &conf, returnkeylist, &num_return_keys );
+	// Get Local Timezone offset in seconds
+	get_timezone_in_seconds( tzhex );
+	//	printdebug("daterange is %d\n", daterange);
+
+	while (1) // livedata...
+	{
+		if (conf.nightMode || is_light(conf.latitude_f, conf.longitude_f))
+		{
+			int result =FetchInverterData();
+			if (result != 0)
+				return result;
+		}
+		else
+		{
+			printlive("Night time\n");
+		}
+		if (!conf.liveMode)
+			break;
+		sleep(10);
+	}
+
+	
+
+	if( archdatalen > 0 )
+		free( archdatalist );
+	archdatalen=0;
+	free(last_sent);
 
 
 	return 0;
